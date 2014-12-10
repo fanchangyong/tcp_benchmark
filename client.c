@@ -8,9 +8,10 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
 
 const char* host="127.0.0.1";
-unsigned short port=80;
+unsigned short port=8888;
 
 int rate = 1000; // packet per second
 int connections = 800; // tcp connections
@@ -35,8 +36,8 @@ static void write_cb(struct ev_loop* loop,ev_io* w,int nevents)
 	}
 	else if(n<0)
 	{
-		printf("errno:%d\n",errno);
-		err("write");
+		//printf("errno:%d\n",errno);
+		//err("write");
 	}
 	else
 	{
@@ -58,8 +59,9 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int nevents)
 	}
 	else if(n<0)
 	{
-		printf("read errno:%d\n",errno);
-		if(errno!=35) err("read");
+		printf("read errno:%d,fd:%d\n",errno,fd);
+		perror("read");
+		//if(errno!=35) err("read");
 	}
 	else
 	{
@@ -86,18 +88,18 @@ static void conn_cb(struct ev_loop* loop,ev_io* w,int nevents)
 
 	int fd = w->fd;
 
-	ev_io* watcher = malloc(sizeof(ev_io));
-	ev_io_init(watcher,watcher_cb,fd,EV_WRITE|EV_READ);
-	ev_io_start(loop,watcher);
+	/*ev_io* watcher = malloc(sizeof(ev_io));*/
+	/*ev_io_init(watcher,watcher_cb,fd,EV_WRITE|EV_READ);*/
+	/*ev_io_start(loop,watcher);*/
 
 
-	/*ev_io *write_watcher = malloc(sizeof(ev_io));*/
-	/*ev_io_init(write_watcher,write_cb,fd,EV_WRITE);*/
-	/*ev_io_start(loop,write_watcher);*/
+	ev_io *write_watcher = malloc(sizeof(ev_io));
+	ev_io_init(write_watcher,write_cb,fd,EV_WRITE);
+	ev_io_start(loop,write_watcher);
 
-	/*ev_io *read_watcher = malloc(sizeof(ev_io));*/
-	/*ev_io_init(read_watcher,read_cb,fd,EV_READ);*/
-	/*ev_io_start(loop,read_watcher);*/
+	ev_io *read_watcher = malloc(sizeof(ev_io));
+	ev_io_init(read_watcher,read_cb,fd,EV_READ);
+	ev_io_start(loop,read_watcher);
 
 	ev_io_stop(loop,w);
 }
@@ -159,14 +161,29 @@ void do_connect(struct ev_loop* loop,int connections,
 
 }
 
+void* worker(void* p)
+{
+	sleep(1);
+	struct ev_loop* loop = p;
+	ev_run(loop,0);
+	printf("worker exit\n");
+	return NULL;
+}
+
 int main(int argc,char** argv)
 {
 	parse_option(argc,argv);
 
 	signal(SIGPIPE,SIG_IGN);
-	struct ev_loop* loop = ev_default_loop(0);
-	do_connect(loop,connections,host,port);
+	struct ev_loop* loop = ev_loop_new(0);
 
-	ev_run(loop,0);
+	pthread_t thread;
+	if(pthread_create(&thread,NULL,worker,loop)!=0)
+	{
+		err("pthread_create");
+	}
+	do_connect(loop,connections,host,port);
+	pthread_join(thread,NULL);
+
 	return 0;
 }
