@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <sys/uio.h>
 
-int backlog = 1;
+int backlog = 100;
 int port = 8888;
 
 void err(char* err)
@@ -20,9 +20,15 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 	int fd = w->fd;
 	char buf[1024];
 	int n = read(fd,buf,sizeof(buf));
+	printf("server read:%d\n",n);
 	if(n<0)
 	{
 		perror("read");
+	}
+	else if(n==0)
+	{
+		printf("EOF\n");
+		ev_io_stop(loop,w);
 	}
 
 }
@@ -30,6 +36,8 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 static void write_cb(struct ev_loop* loop,ev_io* w,int events)
 {
 	int fd = w->fd;
+	printf("write cb\n");
+	ev_io_stop(loop,w);
 }
 
 static void listen_cb(struct ev_loop* loop,ev_io* w,int events)
