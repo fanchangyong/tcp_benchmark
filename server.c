@@ -6,7 +6,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/uio.h>
+#include <pthread.h>
 
+int thread_num = 4;
 int backlog = 100;
 int port = 8888;
 
@@ -20,7 +22,7 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 	int fd = w->fd;
 	char buf[1024];
 	int n = read(fd,buf,sizeof(buf));
-	printf("server read:%d\n",n);
+	printf("read:%d\n",n);
 	if(n<0)
 	{
 		perror("read");
@@ -30,31 +32,45 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 		printf("EOF\n");
 		ev_io_stop(loop,w);
 	}
-
 }
 
 static void write_cb(struct ev_loop* loop,ev_io* w,int events)
 {
+	printf("writable\n");
 	int fd = w->fd;
-	printf("write cb\n");
-	ev_io_stop(loop,w);
+	//ev_io_stop(loop,w);
+}
+
+static void io_cb(struct ev_loop* loop,ev_io* w,int events)
+{
+	printf("io cb,events:%d:%d:%d\n",events,EV_WRITE,EV_READ);
+	if(events & EV_WRITE){
+		write_cb(loop,w,events);
+	}
+	if(events & EV_READ){
+		read_cb(loop,w,events);
+	}
 }
 
 static void listen_cb(struct ev_loop* loop,ev_io* w,int events)
 {
+	printf("listen cb\n");
 	int fd = w->fd;
 	int clientfd = accept(fd,NULL,NULL);
 
-	ev_io* write_watcher = malloc(sizeof(ev_io));
-	ev_io_init(write_watcher,write_cb,clientfd,EV_WRITE);
-	ev_io_start(loop,write_watcher);
-
-	ev_io* read_watcher = malloc(sizeof(ev_io));
-	ev_io_init(read_watcher,read_cb,clientfd,EV_READ);
-	ev_io_start(loop,read_watcher);
+	ev_io* io_watcher = malloc(sizeof(ev_io));
+	ev_io_init(io_watcher,io_cb,clientfd,EV_WRITE|EV_READ);
+	ev_io_start(loop,io_watcher);
 }
 
-void do_listen(struct ev_loop* loop)
+void do_listen(struct ev_loop* loop,int fd)
+{
+	ev_io* listen_watcher = malloc(sizeof(ev_io));
+	ev_io_init(listen_watcher,listen_cb,fd,EV_READ);
+	ev_io_start(loop,listen_watcher);
+}
+
+int create_listen_fd()
 {
 	int fd = socket(AF_INET,SOCK_STREAM,0);
 	if(fd==-1) err("socket");
@@ -70,17 +86,32 @@ void do_listen(struct ev_loop* loop)
 
 	if(listen(fd,backlog)==-1) err("listen");
 
-	ev_io* listen_watcher = malloc(sizeof(ev_io));
-	ev_io_init(listen_watcher,listen_cb,fd,EV_READ);
-	ev_io_start(loop,listen_watcher);
+	return fd;
+}
 
+void* worker(void* p)
+{
+	int fd = *(int*)(p);
+	struct ev_loop* loop = ev_loop_new(0);
+	do_listen(loop,fd);
+	ev_run(loop,0);
+	printf("worker exiting\n");
+	return NULL;
 }
 
 int main()
 {
-	struct ev_loop *loop = ev_default_loop(0);
-	do_listen(loop);
+	int fd = create_listen_fd();
+	pthread_t *threads = malloc(sizeof(pthread_t)*thread_num);
+	int i;
+	for(i=0;i<thread_num;i++){
+		pthread_create(&threads[i],NULL,worker,&fd);
+	}
 
-	ev_run(loop,0);
+	for(i=0;i<thread_num;i++){
+		pthread_join(threads[i],NULL);
+	}
+	printf("Exiting....\n");
+
 	return 0;
 }

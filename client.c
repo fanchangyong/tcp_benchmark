@@ -92,7 +92,6 @@ static void io_cb(struct ev_loop* loop,ev_io* w,int nevents)
 static void conn_cb(struct ev_loop* loop,ev_io* w,int nevents)
 {
 	int fd = w->fd;
-	printf("connect cb:%d\n",fd);
 
 	struct sockaddr_in addr;
 	addr.sin_family = AF_INET;
@@ -185,15 +184,12 @@ void do_connect(struct ev_loop* loop,int connections,
 		if(connect(fd,(struct sockaddr*)&addr,socklen)==-1)
 		{
 			if(errno!=EINPROGRESS) err("connect");
-			printf("in progress:%d\n",fd);
 			ev_io* watcher = malloc(sizeof(ev_io));
 			ev_io_init(watcher,conn_cb,fd,EV_WRITE);
 			ev_io_start(loop,watcher);
 		}
 		else
 		{
-			printf("connected,fd:%d!\n",fd);
-
 			ev_io *watcher = malloc(sizeof(ev_io));
 			ev_io_init(watcher,io_cb,fd,EV_WRITE|EV_READ);
 			ev_io_start(loop,watcher);
