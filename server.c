@@ -10,7 +10,7 @@
 #include <fcntl.h>
 
 int thread_num = 4;
-int backlog = 100;
+int backlog = SOMAXCONN;
 int port = 8888;
 
 void err(char* err)
