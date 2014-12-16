@@ -15,6 +15,7 @@ unsigned short port=8888;
 
 int connections = 800; // tcp connections
 int packet_size = 1024; // packet size
+int read_buf_size = 1024; // read buffer size
 int run_time = 5; // runnint time
 int threads = 1; // threads
 
@@ -26,16 +27,16 @@ int bytes_read = 0; // total bytes read
 
 void add_bytes_sent(int add)
 {
-	pthread_mutex_lock(send_mutex);
+	//pthread_mutex_lock(send_mutex);
 	bytes_sent+=add;
-	pthread_mutex_unlock(send_mutex);
+	//pthread_mutex_unlock(send_mutex);
 }
 
 void add_bytes_read(int add)
 {
-	pthread_mutex_lock(read_mutex);
+	//pthread_mutex_lock(read_mutex);
 	bytes_read+=add;
-	pthread_mutex_unlock(read_mutex);
+	//pthread_mutex_unlock(read_mutex);
 }
 
 void init_locks()
@@ -86,9 +87,9 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int nevents)
 {
 	//printf("readable\n");
 	int fd = w->fd;
-	static char buf[10240];
+	char* buf = malloc(read_buf_size);
 	for(;;){
-		int n = read(fd,buf,sizeof(buf));
+		int n = read(fd,buf,read_buf_size);
 		if(n==0){
 			ev_io_stop(loop,w);
 		}else if(n<0){
@@ -146,8 +147,7 @@ static void print_options()
 void parse_option(int argc,char** argv)
 {
 	int ch;
-	while((ch=getopt(argc,argv,"c:r:b:t:l:"))!=-1)
-	{
+	while((ch=getopt(argc,argv,"c:r:b:t:l:"))!=-1){
 		switch(ch)
 		{
 			case 'c':
@@ -168,6 +168,11 @@ void parse_option(int argc,char** argv)
 			case 'l':
 			{
 				threads = atoi(optarg);
+				break;
+			}
+			case 'r':
+			{
+				read_buf_size = atoi(optarg);
 				break;
 			}
 		}
