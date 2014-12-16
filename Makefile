@@ -5,7 +5,11 @@ server:server.c
 client:client.c
 	cc client.c -lev -lpthread -g -o client
 
-.PHONY:clean
+.PHONY:clean run
+
+run:
+	./server &
+	./client
 
 clean:
 	rm -f client server

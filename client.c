@@ -62,25 +62,23 @@ static void write_cb(struct ev_loop* loop,ev_io* w,int nevents)
 	int fd = w->fd;
 	char* buf = malloc(packet_size);
 
-	for(;;){
-		ssize_t n = write(fd,buf,packet_size);
-		if(n==0){
-			printf("write EOF\n");
-		}else if(n<0){
-			//printf("errno:%d\n",errno);
-			if(errno==EAGAIN || errno==EWOULDBLOCK){
-				break;
-			}else{
-				printf("write error:%s,%d Retry...\n",
-						strerror(errno),errno);
-				close(fd);
-				ev_io_stop(loop,w);
-				do_connect(loop,1,host,port);
-			}
+	ssize_t n = write(fd,buf,packet_size);
+	if(n==0){
+		printf("write EOF\n");
+	}else if(n<0){
+		//printf("errno:%d\n",errno);
+		if(errno==EAGAIN || errno==EWOULDBLOCK){
+			printf("WRITE EAGAIN\n");
 		}else{
-			add_bytes_sent(n);
-			//printf("written:%ld\n",n);
+			printf("write error:%s,%d Retry...\n",
+					strerror(errno),errno);
+			close(fd);
+			ev_io_stop(loop,w);
+			do_connect(loop,1,host,port);
 		}
+	}else{
+		add_bytes_sent(n);
+		//printf("written:%ld\n",n);
 	}
 }
 
@@ -99,8 +97,7 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int nevents)
 			}else{
 				err("read");
 			}
-		}else
-		{
+		}else{
 			add_bytes_read(n);
 		}
 	}
@@ -259,6 +256,7 @@ int main(int argc,char** argv)
 	printf("Bytes sent: %d MB\n",bytes_sent/1024/1024);
 	printf("Write speed: %d MB/s\n",bytes_sent/1024/1024/run_time);
 	printf("Bytes read: %d\n",bytes_read);
+	printf("Read speed: %d MB/s\n",bytes_read/1024/1024/run_time);
 
 	return 0;
 }
