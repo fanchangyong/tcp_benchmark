@@ -38,7 +38,8 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 static void write_cb(struct ev_loop* loop,ev_io* w,int events)
 {
 	int fd = w->fd;
-	//ev_io_stop(loop,w);
+	char buf[1024];
+	write(fd,buf,1024);
 }
 
 static void io_cb(struct ev_loop* loop,ev_io* w,int events)
