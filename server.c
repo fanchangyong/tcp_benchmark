@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/uio.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 int thread_num = 4;
 int backlog = 100;
@@ -15,6 +16,7 @@ int port = 8888;
 void err(char* err)
 {
 	perror(err);
+	exit(1);
 }
 
 static void read_cb(struct ev_loop* loop,ev_io* w,int events)
@@ -22,7 +24,6 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 	int fd = w->fd;
 	char buf[1024];
 	int n = read(fd,buf,sizeof(buf));
-	printf("read:%d\n",n);
 	if(n<0)
 	{
 		perror("read");
@@ -36,14 +37,12 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int events)
 
 static void write_cb(struct ev_loop* loop,ev_io* w,int events)
 {
-	printf("writable\n");
 	int fd = w->fd;
 	//ev_io_stop(loop,w);
 }
 
 static void io_cb(struct ev_loop* loop,ev_io* w,int events)
 {
-	printf("io cb,events:%d:%d:%d\n",events,EV_WRITE,EV_READ);
 	if(events & EV_WRITE){
 		write_cb(loop,w,events);
 	}
@@ -54,7 +53,6 @@ static void io_cb(struct ev_loop* loop,ev_io* w,int events)
 
 static void listen_cb(struct ev_loop* loop,ev_io* w,int events)
 {
-	printf("listen cb\n");
 	int fd = w->fd;
 	int clientfd = accept(fd,NULL,NULL);
 
@@ -68,6 +66,18 @@ void do_listen(struct ev_loop* loop,int fd)
 	ev_io* listen_watcher = malloc(sizeof(ev_io));
 	ev_io_init(listen_watcher,listen_cb,fd,EV_READ);
 	ev_io_start(loop,listen_watcher);
+}
+
+void set_nonblock(int fd)
+{
+	int flags = fcntl(fd,F_GETFL);
+	if(flags==-1){
+		err("fcntl");
+	}
+	flags = fcntl(fd,F_SETFL,flags|O_NONBLOCK);
+	if(flags==-1){
+		err("fcntl");
+	}
 }
 
 int create_listen_fd()

@@ -24,32 +24,33 @@ void do_connect(struct ev_loop* loop,int connections,
 
 void err(char* str)
 {
+	printf("errno:%d\n",errno);
 	perror(str);
-	exit(1);
+	abort();
 }
 
 static void write_cb(struct ev_loop* loop,ev_io* w,int nevents)
 {
 	//printf("writable\n");
 	int fd = w->fd;
-	char req_str[]="GET / HTTP/1.1\r\n\r\n";
 	char* buf = malloc(packet_size);
-	ssize_t n = write(fd,buf,packet_size);
-	if(n==0)
-	{
-		printf("write EOF\n");
-	}
-	else if(n<0)
-	{
-		//printf("errno:%d\n",errno);
-		printf("errno:%d:%d\n",errno,ECONNRESET);
-		close(fd);
-		ev_io_stop(loop,w);
-		do_connect(loop,connections,host,port);
-	}
-	else
-	{
-		//printf("written:%ld\n",n);
+
+	for(;;){
+		ssize_t n = write(fd,buf,packet_size);
+		if(n==0){
+			printf("write EOF\n");
+		}else if(n<0){
+			//printf("errno:%d\n",errno);
+			if(errno==EAGAIN || errno==EWOULDBLOCK){
+				break;
+			}else{
+				close(fd);
+				ev_io_stop(loop,w);
+				do_connect(loop,1,host,port);
+			}
+		}else{
+			//printf("written:%ld\n",n);
+		}
 	}
 }
 
@@ -57,34 +58,31 @@ static void read_cb(struct ev_loop* loop,ev_io* w,int nevents)
 {
 	//printf("readable\n");
 	int fd = w->fd;
-	char buf[10240];
-	int n = read(fd,buf,sizeof(buf));
-	if(n==0)
-	{
-		//printf("EOF\n");
-		ev_io_stop(loop,w);
-	}
-	else if(n<0)
-	{
-		printf("read errno:%d,fd:%d\n",errno,fd);
-		perror("read");
-		//if(errno!=35) err("read");
-	}
-	else
-	{
-		printf("read:%s\n",buf);
+	static char buf[10240];
+	for(;;){
+		int n = read(fd,buf,sizeof(buf));
+		if(n==0){
+			ev_io_stop(loop,w);
+		}else if(n<0){
+			if(errno==EAGAIN || errno==EWOULDBLOCK){
+				break;
+			}else{
+				err("read");
+			}
+		}else
+		{
+			printf("read:%s\n",buf);
+		}
 	}
 }
 
 static void io_cb(struct ev_loop* loop,ev_io* w,int nevents)
 {
 	//printf("watcher cb,events:%d:%d:%d:%d\n",w->events,EV_WRITE,EV_READ,nevents);
-	if(nevents & EV_WRITE)
-	{
+	if(nevents & EV_WRITE){
 		write_cb(loop,w,nevents);
 	}
-	if(nevents & EV_READ)
-	{
+	if(nevents & EV_READ){
 		read_cb(loop,w,nevents);
 	}
 }
@@ -92,6 +90,7 @@ static void io_cb(struct ev_loop* loop,ev_io* w,int nevents)
 static void conn_cb(struct ev_loop* loop,ev_io* w,int nevents)
 {
 	int fd = w->fd;
+	printf("conn cb:%d,thread_id:%ld\n",fd,pthread_self());
 
 	struct sockaddr_in addr;
 	addr.sin_family = AF_INET;
@@ -102,6 +101,7 @@ static void conn_cb(struct ev_loop* loop,ev_io* w,int nevents)
 		printf("errno:%d,fd:%d\n",errno,fd);
 		err("connect2");
 	}
+	printf("conn cb connected:%d\n",fd);
 	ev_io_stop(loop,w);
 
 	ev_io *watcher = malloc(sizeof(ev_io));
@@ -165,8 +165,7 @@ void do_connect(struct ev_loop* loop,int connections,
 								const char* host,unsigned short port)
 {
 	int i;
-	for(i=0;i<connections;i++)
-	{
+	for(i=0;i<connections;i++){
 		int fd = socket(AF_INET,SOCK_STREAM,0);
 		if(fd==-1) err("socket");
 
@@ -181,20 +180,19 @@ void do_connect(struct ev_loop* loop,int connections,
 		if(flags==-1) err("fcntl");
 		fcntl(fd,F_SETFL,flags|O_NONBLOCK);
 
-		if(connect(fd,(struct sockaddr*)&addr,socklen)==-1)
-		{
-			if(errno!=EINPROGRESS) err("connect");
+		if(connect(fd,(struct sockaddr*)&addr,socklen)==-1){
+			if(errno!=EINPROGRESS) {
+				err("connect");
+			}
+			//printf("inprogress:%d\n",fd);
 			ev_io* watcher = malloc(sizeof(ev_io));
 			ev_io_init(watcher,conn_cb,fd,EV_WRITE);
 			ev_io_start(loop,watcher);
-		}
-		else
-		{
+		}else{
 			ev_io *watcher = malloc(sizeof(ev_io));
 			ev_io_init(watcher,io_cb,fd,EV_WRITE|EV_READ);
 			ev_io_start(loop,watcher);
 		}
-
 	}
 
 }

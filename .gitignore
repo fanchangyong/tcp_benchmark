@@ -3,3 +3,4 @@ tcpdump.cap
 *.dSYM
 client
 server
+*.log
